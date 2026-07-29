@@ -446,7 +446,7 @@ ConnectionError: Unable to download detection model
 
 - Đảm bảo ESP32 và máy tính **cùng mạng WiFi**
 - Kiểm tra IP máy tính: `ipconfig` (Windows) / `ifconfig` (Linux)
-- Cập nhật `SERVER_HOST` trong firmware
+- Cập nhật `SERVER_HOST` trong esp32
 - Mở port 5000 trên Windows Firewall
 
 ### OCR confidence thấp / đọc sai số
