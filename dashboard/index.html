@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartMeter – Hệ Thống Đọc Công Tơ Điện Thông Minh</title>
+  <meta name="description" content="Hệ thống IoT tự động đọc chỉ số công tơ điện từ xa bằng ESP32-CAM và OCR. Quản lý, giám sát và phát hiện bất thường tiêu thụ điện." />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <!-- Leaflet.js (bản đồ) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!--  SIDEBAR                                                      -->
+<!-- ============================================================ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">⚡</div>
+    <div class="logo-text">
+      <span class="logo-brand">SmartMeter</span>
+      <span class="logo-sub">v1.0 – IoT Dashboard</span>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">TỔNG QUAN</div>
+    <a href="#" class="nav-item active" id="nav-overview" onclick="showPage('overview')">
+      <i data-lucide="layout-dashboard"></i> Tổng Quan
+    </a>
+    <a href="#" class="nav-item" id="nav-meters" onclick="showPage('meters')">
+      <i data-lucide="gauge"></i> Danh Sách Công Tơ
+    </a>
+    <a href="#" class="nav-item" id="nav-map" onclick="showPage('map')">
+      <i data-lucide="map-pin"></i> Bản Đồ
+    </a>
+
+    <div class="nav-section-label">PHÂN TÍCH</div>
+    <a href="#" class="nav-item" id="nav-charts" onclick="showPage('charts')">
+      <i data-lucide="bar-chart-3"></i> Biểu Đồ
+    </a>
+    <a href="#" class="nav-item" id="nav-alerts" onclick="showPage('alerts')">
+      <i data-lucide="bell"></i> Cảnh Báo
+      <span class="badge-alert" id="badge-count">5</span>
+    </a>
+    <a href="#" class="nav-item" id="nav-camera" onclick="showPage('camera')">
+      <i data-lucide="camera"></i> Ảnh Công Tơ
+    </a>
+
+    <div class="nav-section-label">HỆ THỐNG</div>
+    <a href="#" class="nav-item" id="nav-billing" onclick="showPage('billing')">
+      <i data-lucide="receipt"></i> Tính Tiền Điện
+    </a>
+    <a href="#" class="nav-item" id="nav-settings" onclick="showPage('settings')">
+      <i data-lucide="settings"></i> Cài Đặt
+    </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="server-status" id="server-status">
+      <span class="status-dot online"></span>
+      <span>Demo Mode</span>
+    </div>
+    <div class="sidebar-version">ESP32-CAM + OCR</div>
+  </div>
+</aside>
+
+<!-- ============================================================ -->
+<!--  MAIN CONTENT                                                 -->
+<!-- ============================================================ -->
+<main class="main-content">
+
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="menu-btn" onclick="toggleSidebar()" title="Mở/đóng menu">
+        <i data-lucide="menu"></i>
+      </button>
+      <div class="page-breadcrumb">
+        <span id="page-title">Tổng Quan</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-time" id="topbar-time">--:--:--</div>
+      <button class="icon-btn" onclick="refreshData()" title="Làm mới dữ liệu" id="btn-refresh">
+        <i data-lucide="refresh-cw"></i>
+      </button>
+      <div class="topbar-avatar">QTV</div>
+    </div>
+  </header>
+
+  <!-- ========== PAGE: TỔNG QUAN ========== -->
+  <section class="page active" id="page-overview">
+
+    <!-- Stat Cards -->
+    <div class="stats-grid">
+      <div class="stat-card stat-blue">
+        <div class="stat-icon"><i data-lucide="gauge"></i></div>
+        <div class="stat-body">
+          <div class="stat-value" id="stat-meters">5</div>
+          <div class="stat-label">Tổng Công Tơ</div>
+        </div>
+        <div class="stat-trend up">+0 hôm nay</div>
+      </div>
+      <div class="stat-card stat-green">
+        <div class="stat-icon"><i data-lucide="zap"></i></div>
+        <div class="stat-body">
+          <div class="stat-value" id="stat-kwh">--</div>
+          <div class="stat-label">kWh Hôm Nay</div>
+        </div>
+        <div class="stat-trend up" id="trend-kwh">Đang tải...</div>
+      </div>
+      <div class="stat-card stat-orange">
+        <div class="stat-icon"><i data-lucide="bell"></i></div>
+        <div class="stat-body">
+          <div class="stat-value" id="stat-alerts">5</div>
+          <div class="stat-label">Cảnh Báo Chưa Đọc</div>
+        </div>
+        <div class="stat-trend down">Cần xử lý!</div>
+      </div>
+      <div class="stat-card stat-purple">
+        <div class="stat-icon"><i data-lucide="database"></i></div>
+        <div class="stat-body">
+          <div class="stat-value" id="stat-readings">--</div>
+          <div class="stat-label">Tổng Lần Đọc</div>
+        </div>
+        <div class="stat-trend up">Tự động</div>
+      </div>
+    </div>
+
+    <!-- Main Charts Row -->
+    <div class="grid-2col">
+
+      <!-- Chart tổng hợp -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><i data-lucide="bar-chart-2"></i> Tiêu Thụ Điện – 7 Ngày Qua</h2>
+          <div class="card-actions">
+            <button class="btn-ghost" onclick="updateOverviewChart('week')">7N</button>
+            <button class="btn-ghost active-tab" onclick="updateOverviewChart('month')">30N</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <canvas id="chart-overview" height="200"></canvas>
+        </div>
+      </div>
+
+      <!-- Phân bố tiêu thụ -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><i data-lucide="pie-chart"></i> Phân Bố Theo Công Tơ</h2>
+        </div>
+        <div class="card-body chart-donut-wrap">
+          <canvas id="chart-donut" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Readings Table -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title"><i data-lucide="list"></i> Chỉ Số Gần Đây</h2>
+        <button class="btn-ghost" onclick="showPage('meters')">Xem tất cả →</button>
+      </div>
+      <div class="card-body p0">
+        <table class="data-table" id="table-recent">
+          <thead>
+            <tr>
+              <th>Công Tơ</th>
+              <th>Vị Trí</th>
+              <th>Chỉ Số (kWh)</th>
+              <th>Độ Tin Cậy OCR</th>
+              <th>Thời Gian</th>
+              <th>Trạng Thái</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-recent">
+            <tr><td colspan="6" class="loading-row"><div class="spinner"></div>Đang tải...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </section><!-- /page-overview -->
+
+
+  <!-- ========== PAGE: DANH SÁCH CÔNG TƠ ========== -->
+  <section class="page" id="page-meters">
+    <div class="page-toolbar">
+      <input type="text" class="search-input" id="search-meters" placeholder="🔍 Tìm công tơ, địa chỉ, khách hàng..." oninput="filterMeters(this.value)" />
+      <select class="select-input" id="filter-status" onchange="filterMeters(document.getElementById('search-meters').value)">
+        <option value="">Tất cả trạng thái</option>
+        <option value="active">Hoạt động</option>
+        <option value="warning">Cảnh báo</option>
+        <option value="offline">Offline</option>
+      </select>
+    </div>
+    <div class="meters-grid" id="meters-grid">
+      <!-- Filled by JS -->
+    </div>
+  </section>
+
+  <!-- ========== PAGE: BẢN ĐỒ ========== -->
+  <section class="page" id="page-map">
+    <div class="card" style="height:calc(100vh - 140px);">
+      <div class="card-header">
+        <h2 class="card-title"><i data-lucide="map"></i> Bản Đồ Vị Trí Công Tơ</h2>
+        <span class="badge-info">Leaflet.js + OpenStreetMap</span>
+      </div>
+      <div id="leaflet-map" style="height:calc(100% - 60px); border-radius:0 0 16px 16px;"></div>
+    </div>
+  </section>
+
+  <!-- ========== PAGE: BIỂU ĐỒ ========== -->
+  <section class="page" id="page-charts">
+    <div class="grid-2col">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><i data-lucide="trending-up"></i> Tiêu Thụ Theo Giờ – 24h</h2>
+          <select class="select-input sm" id="chart-meter-select" onchange="updateHourlyChart()">
+            <option value="all">Tất cả công tơ</option>
+          </select>
+        </div>
+        <div class="card-body">
+          <canvas id="chart-hourly" height="220"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><i data-lucide="calendar"></i> So Sánh Tháng</h2>
+        </div>
+        <div class="card-body">
+          <canvas id="chart-monthly" height="220"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title"><i data-lucide="activity"></i> Đường Chỉ Số Theo Thời Gian – 30 Ngày</h2>
+      </div>
+      <div class="card-body">
+        <canvas id="chart-timeline" height="160"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== PAGE: CẢNH BÁO ========== -->
+  <section class="page" id="page-alerts">
+    <div class="alerts-filter-bar">
+      <button class="filter-btn active" onclick="filterAlerts('all', this)">Tất Cả</button>
+      <button class="filter-btn" onclick="filterAlerts('danger', this)">🔴 Nguy Hiểm</button>
+      <button class="filter-btn" onclick="filterAlerts('warning', this)">🟡 Cảnh Báo</button>
+      <button class="filter-btn" onclick="filterAlerts('info', this)">🔵 Thông Tin</button>
+    </div>
+    <div id="alerts-list">
+      <!-- Filled by JS -->
+    </div>
+  </section>
+
+  <!-- ========== PAGE: ẢNH CÔNG TƠ ========== -->
+  <section class="page" id="page-camera">
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title"><i data-lucide="camera"></i> Ảnh Chụp Mới Nhất Từ ESP32-CAM</h2>
+        <span class="badge-info">OCR tự động nhận dạng</span>
+      </div>
+      <div class="card-body" style="display:flex;gap:16px;flex-wrap:wrap">
+        <div class="live-camera" style="flex:1;min-width:320px;max-width:520px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+              <select id="upload-meter-select" class="select-input" style="min-width:180px">
+                <option value="">-- Chọn công tơ upload --</option>
+              </select>
+              <input id="upload-file-input" type="file" class="text-input" accept="image/*" style="flex:1;min-width:180px" />
+              <button id="btn-upload-image" type="button" class="btn-primary">Upload ảnh</button>
+            </div>
+            <div id="upload-result" style="margin-bottom:12px;padding:12px;border-radius:12px;background:rgba(15,23,42,0.9);color:#e2e8f0;display:none;min-height:90px;font-size:14px;line-height:1.5"></div>
+            <div style="font-size:13px;color:var(--text-muted);">Upload ảnh trực tiếp vào Flask server, ESP32 sẽ chỉ cần gửi file JPEG.</div>
+          <div class="camera-gallery" id="camera-gallery">
+            <!-- Filled by JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== PAGE: TÍNH TIỀN ĐIỆN ========== -->
+  <section class="page" id="page-billing">
+    <div class="billing-container">
+      <div class="card billing-calc">
+        <div class="card-header">
+          <h2 class="card-title"><i data-lucide="calculator"></i> Tính Tiền Điện</h2>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label>Chọn Công Tơ</label>
+            <select class="select-input" id="billing-meter">
+              <option value="">-- Chọn công tơ --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Kỳ Tính</label>
+            <div class="input-row">
+              <input type="date" class="text-input" id="billing-from" />
+              <span>đến</span>
+              <input type="date" class="text-input" id="billing-to" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Biểu Giá Điện</label>
+            <select class="select-input" id="billing-tier">
+              <option value="evn">EVN Bậc Thang (2024)</option>
+              <option value="flat">Giá Bình Quân (2.006 đ/kWh)</option>
+            </select>
+          </div>
+          <button class="btn-primary" onclick="calculateBill()">
+            <i data-lucide="zap"></i> Tính Tiền
+          </button>
+        </div>
+      </div>
+
+      <div class="card billing-result" id="billing-result" style="display:none">
+        <div class="card-header">
+          <h2 class="card-title"><i data-lucide="file-text"></i> Hóa Đơn Điện</h2>
+        </div>
+        <div class="card-body" id="billing-result-body"></div>
+      </div>
+
+      <!-- Bảng giá EVN -->
+      <div class="card billing-price-table">
+        <div class="card-header">
+          <h2 class="card-title"><i data-lucide="table"></i> Biểu Giá Điện EVN 2024</h2>
+        </div>
+        <div class="card-body p0">
+          <table class="data-table">
+            <thead><tr><th>Bậc</th><th>Sản Lượng (kWh)</th><th>Đơn Giá (VNĐ/kWh)</th></tr></thead>
+            <tbody>
+              <tr><td>Bậc 1</td><td>0 – 50</td><td class="mono">1.806</td></tr>
+              <tr><td>Bậc 2</td><td>51 – 100</td><td class="mono">1.866</td></tr>
+              <tr><td>Bậc 3</td><td>101 – 200</td><td class="mono">2.167</td></tr>
+              <tr><td>Bậc 4</td><td>201 – 300</td><td class="mono">2.729</td></tr>
+              <tr><td>Bậc 5</td><td>301 – 400</td><td class="mono">3.050</td></tr>
+              <tr><td>Bậc 6</td><td>>400</td><td class="mono">3.151</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== PAGE: CÀI ĐẶT ========== -->
+  <section class="page" id="page-settings">
+    <div class="settings-grid">
+      <div class="card">
+        <div class="card-header"><h2 class="card-title"><i data-lucide="server"></i> Cấu Hình Server</h2></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label>Flask Server URL</label>
+            <input type="text" class="text-input" id="cfg-server" value="http://localhost:5000" />
+          </div>
+          <div class="form-group">
+            <label>Khoảng Thời Gian Làm Mới (giây)</label>
+            <input type="number" class="text-input" id="cfg-interval" value="30" min="5" max="300" />
+          </div>
+          <button class="btn-primary" onclick="saveSettings()"><i data-lucide="save"></i> Lưu</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2 class="card-title"><i data-lucide="bell"></i> Ngưỡng Cảnh Báo</h2></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label>Ngưỡng Tăng Đột Biến (Z-score sigma)</label>
+            <input type="number" class="text-input" id="cfg-sigma" value="3.0" step="0.5" />
+          </div>
+          <div class="form-group">
+            <label>Tiêu Thụ Ban Đêm (kWh/h)</label>
+            <input type="number" class="text-input" id="cfg-night" value="1.5" step="0.1" />
+          </div>
+          <div class="form-group">
+            <label>Offline Sau (giờ)</label>
+            <input type="number" class="text-input" id="cfg-offline" value="2" min="1" />
+          </div>
+          <button class="btn-primary" onclick="saveSettings()"><i data-lucide="save"></i> Lưu</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2 class="card-title"><i data-lucide="cpu"></i> Thông Tin Hệ Thống</h2></div>
+        <div class="card-body">
+          <div class="info-list">
+            <div class="info-item"><span>Phần Cứng</span><span class="mono">ESP32-CAM (AI Thinker)</span></div>
+            <div class="info-item"><span>Camera</span><span class="mono">OV2640 2MP</span></div>
+            <div class="info-item"><span>OCR Engine</span><span class="mono">EasyOCR + Tesseract</span></div>
+            <div class="info-item"><span>Server</span><span class="mono">Python 3.10 + Flask</span></div>
+            <div class="info-item"><span>Database</span><span class="mono">SQLite</span></div>
+            <div class="info-item"><span>Chu Kỳ Đọc</span><span class="mono">15 phút</span></div>
+            <div class="info-item"><span>Chế Độ Ngủ</span><span class="mono">Deep Sleep ~0.15mA</span></div>
+            <div class="info-item"><span>Dashboard Version</span><span class="mono">v1.0.0</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============================================================ -->
+<!--  MODAL: Chi tiết công tơ                                      -->
+<!-- ============================================================ -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="modal-title">Chi Tiết Công Tơ</h3>
+      <button class="icon-btn" onclick="closeModal()"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!--  TOAST NOTIFICATIONS                                          -->
+<!-- ============================================================ -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
