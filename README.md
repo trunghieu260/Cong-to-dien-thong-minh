@@ -458,18 +458,6 @@ ConnectionError: Unable to download detection model
 
 ---
 
-## 🤝 Đóng góp
-
-Pull Request và Issues luôn được chào đón!
-
-1. Fork repository
-2. Tạo branch: `git checkout -b feature/ten-tinh-nang`
-3. Commit: `git commit -m 'Add: mô tả tính năng'`
-4. Push: `git push origin feature/ten-tinh-nang`
-5. Mở Pull Request
-
----
-
 ## 📄 License
 
 MIT License — xem file [LICENSE](LICENSE) để biết thêm chi tiết.
